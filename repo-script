@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+#Create users folder if not exists
+mkdir -p users
+
+if [ -z "$1" ]; then
+    echo Give a GIT username
+else
+    echo Username is $1
+
+
+    #Getting Git Data
+    file="./users/"$1".json"
+    link="https://api.github.com/users/"$1"/repos"
+
+    if [ -f $file ]; then
+        echo "JSON file found for this user! Do you want to use this one? [Y|n]"
+        read resp
+    else
+        echo "JSON for this user not found! Retrieving users"
+        resp="n"
+    fi
+    
+    if [ "$resp" == "n" ] || [ "$resp" == "N" ]; then
+        echo "Getting new list..."        
+        curl -i -H "Accept: application/json" -H "Content-Type: application/json" --url $link > $file
+    fi
+
+    
+    #Getting the list out of the json file
+    lfile="./users/"$1".lst"
+    if [ -f $lfile ]; then
+        echo "List already exists, overwriting file!"
+        rm $lfile
+    fi
+    cat $file | while read line; do
+        if [[ $line = *"clone_url"* ]]; then
+            url=$(echo $line | awk -F\" '{print $4}')
+            echo $url >> $lfile
+        fi
+    done 
+    
+    echo "List of repos:"
+    cat $lfile
+
+    
+    #Create repo folder if not exists
+    repodir="repos/"$1
+    mkdir -p $repodir
+    
+
+    #Clone or pull all repos
+    cat $lfile | while read lline; do
+        reponame=$(echo $lline | awk -F/ '{print $5}' | awk -F. '{print $1}')
+        dirname=$repodir"/"$reponame
+        echo ""
+        if [ -d $dirname ]; then
+            #REPO EXISTS, PULL 
+            echo $reponame" already exists. PULLING!"   
+            cd $dirname && git pull && cd ../../..
+        else
+            #CLONE REPO
+            echo $reponame" does not exist yet. CLONING!"
+            git clone $lline $dirname
+        fi
+    done 
+fi
+echo ""
+echo "Script finished!"
+ 
